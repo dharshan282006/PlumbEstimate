@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlumbEstimate | AI Plumbing Analysis Bot</title>
+<style>
+:root{--navy:#12233f;--blue:#2563eb;--teal:#0f766e;--bg:#f3f6fb;--ink:#18243a;--muted:#65738a;--line:#dce4ef;--card:#fff;--orange:#f59e0b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--ink)}
+header{background:linear-gradient(115deg,#12233f,#1e4677);color:white;padding:22px 28px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:23px;margin:0 0 5px}header p{margin:0;color:#d6e4fa;font-size:13px}.badge{background:#d1fae5;color:#065f46;padding:7px 11px;border-radius:99px;font-size:12px;font-weight:800}
+main{max-width:1440px;margin:auto;padding:20px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(340px,.85fr);gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:15px;box-shadow:0 4px 15px #1d35570a;overflow:hidden}.card h2{font-size:16px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line)}.body{padding:17px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:125px}.field label{font-size:12px;font-weight:750;color:#526178}input,select,button{font:inherit}input[type="number"],input[type="text"],select{width:100%;padding:10px 11px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:var(--ink)}input[type=file]{max-width:100%;font-size:13px}
+button{border:0;border-radius:9px;padding:10px 14px;font-weight:750;cursor:pointer}.primary{background:var(--blue);color:#fff}.dark{background:var(--navy);color:white}.light{background:#eaf0fa;color:#18345a}.success{background:#0f766e;color:white}.warn{background:#fff7e6;color:#854d0e;border:1px solid #f5d58c}.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.note{font-size:12px;line-height:1.5;color:var(--muted);margin-top:9px}.alert{padding:12px 13px;border-radius:10px;font-size:12px;line-height:1.5;margin-bottom:12px}.alert.warnbox{background:#fff8e8;border:1px solid #f4d48a;color:#7c4a03}.alert.bluebox{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+.workspace{background:#f8fafc;border:1px dashed #b9c6d8;border-radius:11px;min-height:280px;position:relative;overflow:auto;display:flex;align-items:center;justify-content:center}
+#planCanvas{display:block;max-width:100%;height:auto;cursor:crosshair}#empty{padding:45px 20px;text-align:center;color:#738198;font-size:13px}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:12px 0}.metric{border:1px solid var(--line);border-radius:10px;padding:11px}.metric b{display:block;font-size:21px;color:var(--navy)}.metric span{font-size:11px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:10px 8px;border-bottom:1px solid #e7edf5;text-align:left}th{color:#61718a;font-size:11px;text-transform:uppercase;letter-spacing:.04em}td.num{text-align:right;font-variant-numeric:tabular-nums}.swatch{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:7px}
+.systems{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sys{border:1px solid var(--line);border-radius:9px;padding:9px;font-size:12px;display:flex;gap:7px;align-items:center}.sys input{width:auto}
+.status{font-size:12px;color:var(--muted);margin-top:9px;min-height:18px}.pill{display:inline-block;border-radius:99px;background:#edf2f8;padding:4px 8px;font-size:10px;font-weight:800;color:#53657d}
+.footer{max-width:1440px;margin:0 auto;padding:0 20px 24px;color:#66758b;font-size:11px;line-height:1.5}
+@media(max-width:950px){main{grid-template-columns:1fr}}@media(max-width:520px){main{padding:10px}.metrics{grid-template-columns:1fr 1fr}.systems{grid-template-columns:1fr}header{padding:18px}}
+</style>
+</head>
+<body>
+<header>
+ <div><h1>🔧 PlumbEstimate AI Plumbing Analysis Bot</h1><p>Colour-line detection · Scale calibration · Preliminary automatic take-off · BOQ preview</p></div>
+ <span class="badge">LOCAL IMAGE ANALYSIS MVP</span>
+</header>
+<main>
+ <section class="card">
+  <h2>1 · Upload and inspect the plumbing drawing</h2>
+  <div class="body">
+   <div class="row">
+    <div class="field" style="flex:2"><label>Building plumbing plan (PNG / JPG)</label><input id="file" type="file" accept="image/png,image/jpeg,image/webp"></div>
+    <button class="light" id="reset">Reset</button>
+   </div>
+   <div class="workspace" style="margin-top:13px">
+    <canvas id="planCanvas" width="900" height="650" hidden></canvas>
+    <div id="empty">📐<br><br>Upload a colour-coded plumbing layout to begin.<br>Click two points on a known dimension to calibrate scale.</div>
+   </div>
+   <div class="btnrow">
+    <button class="light" id="calMode">① Set scale points</button>
+    <button class="light" id="viewOriginal">Original image</button>
+    <button class="light" id="viewOverlay">Detection overlay</button>
+   </div>
+   <div class="row" style="margin-top:12px">
+    <div class="field"><label>Known distance between clicked points (metres)</label><input id="knownDist" type="number" min="0.001" step="0.001" value="10.668"></div>
+    <div class="field"><label>Scale reference</label><input id="scaleRef" type="text" value="35'-0&quot; overall width"></div>
+    <button class="primary" id="applyScale">Apply scale</button>
+   </div>
+   <div class="note">For this sample drawing, 35'-0" = 10.668 m. Click the two endpoints of that dimension line, or use another clearly known dimension. The image must be calibrated before lengths can be estimated.</div>
+   <div class="status" id="scaleStatus">No image loaded.</div>
+  </div>
+ </section>
+ <section class="card">
+  <h2>2 · AI analysis settings</h2>
+  <div class="body">
+   <div class="alert bluebox"><b>How this MVP reads the plan:</b> it isolates coloured pixels for each legend system, thins those masks toward centre-lines, and estimates route length using the calibrated scale. This is image processing, not a general-purpose vision model.</div>
+   <label style="font-size:12px;font-weight:800;display:block;margin-bottom:9px">Pipe systems to analyse</label>
+   <div class="systems">
+    <label class="sys"><input type="checkbox" checked data-system="blue"><span class="swatch" style="background:#2563eb"></span>Cold water · blue</label>
+    <label class="sys"><input type="checkbox" checked data-system="red"><span class="swatch" style="background:#ef4444"></span>Hot water · red</label>
+    <label class="sys"><input type="checkbox" checked data-system="green"><span class="swatch" style="background:#16a34a"></span>Soil / waste · green</label>
+    <label class="sys"><input type="checkbox" checked data-system="orange"><span class="swatch" style="background:#f97316"></span>Vent · orange</label>
+    <label class="sys"><input type="checkbox" checked data-system="brown"><span class="swatch" style="background:#92400e"></span>Rainwater · brown</label>
+   </div>
+   <div class="row" style="margin-top:13px">
+    <div class="field"><label>Estimated wastage (%)</label><input id="wastage" type="number" min="0" max="50" value="5"></div>
+    <div class="field"><label>Detection sensitivity</label><select id="sensitivity"><option value="normal">Normal</option><option value="high">High (more pixels, more noise)</option><option value="strict">Strict (less noise)</option></select></div>
+   </div>
+   <div class="btnrow"><button class="primary" id="analyse">✨ Analyse drawing automatically</button><button class="success" id="makeBoq">Generate BOQ</button></div>
+   <div class="status" id="analysisStatus">Waiting for drawing and scale.</div>
+   <div class="metrics">
+    <div class="metric"><b id="systemsFound">0</b><span>Systems detected</span></div>
+    <div class="metric"><b id="totalLength">0.00 m</b><span>Detected length*</span></div>
+    <div class="metric"><b id="confidence">—</b><span>Review status</span></div>
+   </div>
+   <div class="alert warnbox"><b>Engineering caution:</b> dimension lines, coloured legend samples, symbols and overlapping routes may be detected as pipework. Review the overlay and quantities. Do not use these preliminary results for construction or procurement without checking the plan.</div>
+  </div>
+ </section>
+ <section class="card">
+  <h2>3 · Automatic pipe quantity take-off</h2>
+  <div class="body" style="overflow-x:auto">
+   <table><thead><tr><th>System</th><th>Typical size from legend</th><th class="num">Length (m)</th><th class="num">Wastage</th><th class="num">Order qty (m)</th></tr></thead><tbody id="results"><tr><td colspan="5">Analyse a calibrated drawing to populate results.</td></tr></tbody></table>
+   <p class="note">*Length is a preliminary colour-mask estimate. Each row displays the assumed typical sizes from the drawing legend, not a guaranteed size assignment for every detected segment.</p>
+  </div>
+ </section>
+ <section class="card">
+  <h2>4 · Fittings, fixtures and BOQ</h2>
+  <div class="body">
+   <div class="alert bluebox"><b>Automatic fitting estimate:</b> elbows/bends and junction candidates are inferred from detected pipe centre-lines. These are preliminary candidates, not certified fitting counts. Fixture symbols, valves, traps and reducers still need AI symbol recognition or confirmation.</div>
+   <table><thead><tr><th>Item</th><th>Auto qty</th><th>Unit</th><th>Method / status</th></tr></thead><tbody id="fittings">
+    <tr><td>Pipe elbows / bends</td><td>—</td><td>Nos.</td><td><span class="pill">Run analysis first</span></td></tr>
+    <tr><td>Tees / junction candidates</td><td>—</td><td>Nos.</td><td><span class="pill">Run analysis first</span></td></tr>
+    <tr><td>Pipe endpoints / connection candidates</td><td>—</td><td>Nos.</td><td><span class="pill">Run analysis first</span></td></tr>
+    <tr><td>Reducers / valves / traps / fixtures</td><td>—</td><td>—</td><td><span class="pill">Needs symbol recognition</span></td></tr>
+   </tbody></table>
+   <div class="row" style="margin-top:14px">
+    <div class="field"><label>Default pipe rate (₹/m)</label><input id="rate" type="number" value="120" min="0"></div>
+    <div class="field"><label>Labour allowance (%)</label><input id="labour" type="number" value="20" min="0" max="100"></div>
+    <div class="field"><label>GST (%)</label><input id="gst" type="number" value="18" min="0" max="100"></div>
+   </div>
+   <div class="metrics">
+    <div class="metric"><b id="materialCost">₹0</b><span>Preliminary pipe material</span></div>
+    <div class="metric"><b id="labourCost">₹0</b><span>Labour allowance</span></div>
+    <div class="metric"><b id="grandTotal">₹0</b><span>Subtotal + GST</span></div>
+   </div>
+   <div class="btnrow"><button class="dark" id="exportCsv">Export pipe BOQ (CSV)</button><button class="light" id="print">Print / Save PDF</button></div>
+  </div>
+ </section>
+</main>
+<div class="footer">PlumbEstimate development prototype. Fixed project rules: municipal supply → sump → pump → OHT; borewell → pump → OHT; all building supply branches originate at OHT; include garden tap; exclude Indian closets and urinals. Pipe colour detection is suitable only for an initial trial on clear, colour-coded plans. A production-grade bot needs trained symbol recognition, line-network reconstruction, dimension/OCR interpretation, confidence scoring and engineer approval.</div>
+<script>
+const canvas=document.getElementById('planCanvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
+const fileEl=document.getElementById('file'),empty=document.getElementById('empty');
+let img=new Image(), loaded=false, originalImageData=null, scalePts=[], scaleM=null, scalePx=null, mode='scale', overlay=false, analysis=[];
+const systems={
+ blue:{name:'Cold-water supply',color:'#2563eb',size:'20 / 25 mm CPVC'},
+ red:{name:'Hot-water supply',color:'#ef4444',size:'20 mm CPVC'},
+ green:{name:'Soil / waste drainage',color:'#16a34a',size:'50 / 75 / 110 mm uPVC'},
+ orange:{name:'Vent pipe',color:'#f97316',size:'75 mm uPVC'},
+ brown:{name:'Rainwater pipe',color:'#92400e',size:'110 mm uPVC'}
+};
+function status(id,msg){document.getElementById(id).textContent=msg}
+function fitCanvas(image){const maxW=1100,maxH=850,s=Math.min(1,maxW/image.width,maxH/image.height);canvas.width=Math.round(image.width*s);canvas.height=Math.round(image.height*s);ctx.drawImage(image,0,0,canvas.width,canvas.height);originalImageData=ctx.getImageData(0,0,canvas.width,canvas.height);canvas.hidden=false;empty.hidden=true;scalePts=[];scaleM=null;scalePx=null;analysis=[];renderResults();status('scaleStatus','Image loaded. Click “Set scale points”, then click two known dimension endpoints.');status('analysisStatus','Ready for scale calibration.');}
+fileEl.addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);img.onload=()=>{fitCanvas(img);URL.revokeObjectURL(u)};img.src=u;});
+document.getElementById('reset').onclick=()=>{loaded=false;fileEl.value='';canvas.hidden=true;empty.hidden=false;ctx.clearRect(0,0,canvas.width,canvas.height);scalePts=[];scaleM=null;scalePx=null;analysis=[];renderResults();status('scaleStatus','No image loaded.');status('analysisStatus','Waiting for drawing and scale.');};
+document.getElementById('calMode').onclick=()=>{mode='scale';status('scaleStatus','Scale mode: click the first and second endpoints of a known dimension on the drawing.');};
+canvas.addEventListener('click',e=>{if(canvas.hidden)return;const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)*canvas.width/r.width,y=(e.clientY-r.top)*canvas.height/r.height;if(mode==='scale'&&scalePts.length<2){scalePts.push({x,y});drawCurrent();status('scaleStatus',scalePts.length===1?'First point set. Click the second endpoint.':'Two points set. Enter known distance and apply scale.');}});
+function drawCurrent(){if(!originalImageData)return;ctx.putImageData(originalImageData,0,0);if(overlay&&analysis.length){const d=ctx.getImageData(0,0,canvas.width,canvas.height);for(let i=0;i<d.data.length;i+=4){if(d.data[i+3]===0)continue;}ctx.putImageData(d,0,0);analysis.forEach(a=>{ctx.fillStyle=a.color;for(let i=0;i<a.mask.length;i++)if(a.mask[i]){const x=i%canvas.width,y=(i/canvas.width)|0;ctx.fillRect(x,y,1,1)}})}scalePts.forEach((p,i)=>{ctx.beginPath();ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fillStyle='#f59e0b';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();ctx.fillStyle='#111827';ctx.font='bold 14px Arial';ctx.fillText(i===0?'A':'B',p.x+7,p.y-7)});if(scalePts.length===2){ctx.beginPath();ctx.moveTo(scalePts[0].x,scalePts[0].y);ctx.lineTo(scalePts[1].x,scalePts[1].y);ctx.strokeStyle='#f59e0b';ctx.lineWidth=2;ctx.stroke();}}
+document.getElementById('applyScale').onclick=()=>{if(scalePts.length!==2)return status('scaleStatus','Please click two scale points first.');const d=parseFloat(document.getElementById('knownDist').value);if(!(d>0))return status('scaleStatus','Enter a known distance greater than zero.');scalePx=Math.hypot(scalePts[1].x-scalePts[0].x,scalePts[1].y-scalePts[0].y);scaleM=d;status('scaleStatus',`Scale set: ${scalePx.toFixed(1)} px = ${scaleM} m (${(scaleM/scalePx).toFixed(5)} m/px). Reference: ${document.getElementById('scaleRef').value||'custom dimension'}.`);};
+document.getElementById('viewOriginal').onclick=()=>{overlay=false;drawCurrent()};
+document.getElementById('viewOverlay').onclick=()=>{overlay=true;drawCurrent()};
+function classify(r,g,b,sens){
+ const loose=sens==='high',strict=sens==='strict';
+ if(b>(loose?95:strict?145:120)&&b>r*(loose?1.18:strict?1.55:1.35)&&b>g*(loose?1.05:strict?1.18:1.08)&&b-r>(strict?55:25))return'blue';
+ if(r>(loose?125:strict?175:150)&&r>g*(strict?1.8:1.35)&&r>b*(strict?1.7:1.35)&&g< (strict?100:145))return'red';
+ if(g>(loose?80:strict?125:100)&&g>r*(strict?1.3:1.12)&&g>b*(strict?1.15:1.05)&&r< (strict?130:175))return'green';
+ if(r>(strict?190:155)&&g>(strict?65:45)&&g<(strict?145:190)&&r>g*1.15&&b<(strict?75:115))return'orange';
+ if(r>(strict?95:75)&&r<(strict?175:220)&&g<(strict?90:125)&&b<(strict?65:95)&&r>g*1.35)return'brown';
+ return null;
+}
+// Zhang-Suen thinning, used to estimate a centreline from each colour mask.
+function thin(src,w,h){let a=src.slice(),changed=true,round=0;const idx=(x,y)=>y*w+x;while(changed&&round++<35){changed=false;for(let step=0;step<2;step++){const del=[];for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const p=idx(x,y);if(!a[p])continue;const n=[a[idx(x,y-1)],a[idx(x+1,y-1)],a[idx(x+1,y)],a[idx(x+1,y+1)],a[idx(x,y+1)],a[idx(x-1,y+1)],a[idx(x-1,y)],a[idx(x-1,y-1)]];const sum=n.reduce((s,v)=>s+v,0);if(sum<2||sum>6)continue;let trans=0;for(let k=0;k<8;k++)if(n[k]===0&&n[(k+1)%8]===1)trans++;if(trans!==1)continue;if(step===0){if(n[0]*n[2]*n[4]||n[2]*n[4]*n[6])continue;}else{if(n[0]*n[2]*n[6]||n[0]*n[4]*n[6])continue;}del.push(p);}if(del.length){changed=true;del.forEach(i=>a[i]=0);}}}return a;}
+
+function inferFittings(mask,w,h){
+ // Estimate local skeleton geometry. Adjacent-pixel degree is noisy at crossings,
+ // so junction pixels are grouped into clusters before reporting candidates.
+ const degree=new Uint8Array(w*h), idx=(x,y)=>y*w+x;
+ for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+  const i=idx(x,y);if(!mask[i])continue;let n=0;
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if((dx||dy)&&mask[idx(x+dx,y+dy)])n++;
+  degree[i]=n;
+ }
+ const junction=new Uint8Array(w*h), endpoint=new Uint8Array(w*h);
+ for(let i=0;i<mask.length;i++){if(mask[i]&&degree[i]>=3)junction[i]=1;if(mask[i]&&degree[i]===1)endpoint[i]=1;}
+ function clusterCount(src){
+  const seen=new Uint8Array(w*h);let count=0;
+  for(let i=0;i<src.length;i++){if(!src[i]||seen[i])continue;count++;const stack=[i];seen[i]=1;
+   while(stack.length){const q=stack.pop(),x=q%w,y=(q/w)|0;
+    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=w||yy>=h)continue;const z=idx(xx,yy);if(src[z]&&!seen[z]){seen[z]=1;stack.push(z);}}
+   }
+  }return count;
+ }
+ // Approximate corners by comparing local direction occupancy in a 5x5 window.
+ let cornerPixels=0;
+ for(let y=2;y<h-2;y++)for(let x=2;x<w-2;x++){const i=idx(x,y);if(!mask[i]||degree[i]!==2)continue;
+  const dirs=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if((dx||dy)&&mask[idx(x+dx,y+dy)])dirs.push([dx,dy]);
+  if(dirs.length===2){const dot=dirs[0][0]*dirs[1][0]+dirs[0][1]*dirs[1][1];if(dot>=-0.2)cornerPixels++;}
+ }
+ return {junctions:clusterCount(junction),endpoints:clusterCount(endpoint),bendCandidates:Math.round(cornerPixels/3)};
+}
+
+function skeletonLength(mask,w,h,mPerPx){let total=0;for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;if(!mask[i])continue;if(x+1<w&&mask[i+1])total+=1;if(y+1<h&&mask[i+w])total+=1;if(x+1<w&&y+1<h&&mask[i+w+1])total+=Math.SQRT2;if(x>0&&y+1<h&&mask[i+w-1])total+=Math.SQRT2;}return total*mPerPx;}
+document.getElementById('analyse').onclick=async()=>{if(!originalImageData)return status('analysisStatus','Upload a drawing first.');if(!scaleM||!scalePx)return status('analysisStatus','Set the scale first.');const sens=document.getElementById('sensitivity').value, enabled=[...document.querySelectorAll('[data-system]:checked')].map(e=>e.dataset.system),w=canvas.width,h=canvas.height,data=originalImageData.data;status('analysisStatus','Analysing coloured routes… larger images may take a moment.');await new Promise(r=>setTimeout(r,20));const masks={};for(const k of enabled)masks[k]=new Uint8Array(w*h);for(let i=0,p=0;i<data.length;i+=4,p++){const k=classify(data[i],data[i+1],data[i+2],sens);if(k&&masks[k])masks[k][p]=1;}
+analysis=[];let sum=0;for(const k of enabled){let mask=masks[k];const count=mask.reduce((a,b)=>a+b,0);if(!count)continue;mask=thin(mask,w,h);const len=skeletonLength(mask,w,h,scaleM/scalePx);if(len>0.01){const fittings=inferFittings(mask,w,h);analysis.push({key:k,name:systems[k].name,size:systems[k].size,color:systems[k].color,length:len,mask,fittings});sum+=len;}}
+overlay=true;drawCurrent();document.getElementById('systemsFound').textContent=analysis.length;document.getElementById('totalLength').textContent=sum.toFixed(2)+' m';document.getElementById('confidence').textContent=analysis.length?'Review':'No match';status('analysisStatus',analysis.length?`Analysis finished: ${analysis.length} coloured system(s) detected. Preliminary bend and junction candidates have also been estimated. Inspect overlay and quantities before accepting.`:'No systems detected. Try High sensitivity or check that the drawing uses the expected colours.');renderResults();};
+function money(n){return '₹'+Math.round(n).toLocaleString('en-IN')}
+function renderResults(){const body=document.getElementById('results');if(!analysis.length){body.innerHTML='<tr><td colspan="5">Analyse a calibrated drawing to populate results.</td></tr>';document.getElementById('systemsFound').textContent='0';document.getElementById('totalLength').textContent='0.00 m';document.getElementById('materialCost').textContent='₹0';document.getElementById('labourCost').textContent='₹0';document.getElementById('grandTotal').textContent='₹0';return;}const waste=Math.max(0,Number(document.getElementById('wastage').value)||0);body.innerHTML=analysis.map(a=>{const order=a.length*(1+waste/100);return `<tr><td><span class="swatch" style="background:${a.color}"></span>${a.name}</td><td>${a.size}</td><td class="num">${a.length.toFixed(2)}</td><td class="num">${waste}%</td><td class="num">${order.toFixed(2)}</td></tr>`}).join('');
+ const sumF=key=>analysis.reduce((s,a)=>s+(a.fittings?.[key]||0),0);
+ document.getElementById('fittings').innerHTML=
+ `<tr><td>Pipe elbows / bends (candidates)</td><td>${sumF('bendCandidates')}</td><td>Nos.</td><td><span class="pill">Auto estimate · verify</span></td></tr>`+
+ `<tr><td>Tees / junction candidates</td><td>${sumF('junctions')}</td><td>Nos.</td><td><span class="pill">Auto estimate · verify</span></td></tr>`+
+ `<tr><td>Pipe endpoints / connection candidates</td><td>${sumF('endpoints')}</td><td>Nos.</td><td><span class="pill">Auto estimate · verify</span></td></tr>`+
+ `<tr><td>Reducers / valves / traps / fixtures</td><td>—</td><td>—</td><td><span class="pill">Needs symbol recognition</span></td></tr>`;
+ const qty=analysis.reduce((s,a)=>s+a.length*(1+waste/100),0),mat=qty*Math.max(0,Number(document.getElementById('rate').value)||0),lab=mat*Math.max(0,Number(document.getElementById('labour').value)||0)/100,gst=(mat+lab)*Math.max(0,Number(document.getElementById('gst').value)||0)/100;document.getElementById('materialCost').textContent=money(mat);document.getElementById('labourCost').textContent=money(lab);document.getElementById('grandTotal').textContent=money(mat+lab+gst);}
+['wastage','rate','labour','gst'].forEach(id=>document.getElementById(id).addEventListener('input',renderResults));
+document.getElementById('makeBoq').onclick=()=>{if(!analysis.length)return status('analysisStatus','Analyse the drawing before generating a BOQ.');renderResults();status('analysisStatus','Preliminary BOQ refreshed. Fitting and fixture quantities remain pending symbol recognition and engineering review.');};
+document.getElementById('exportCsv').onclick=()=>{if(!analysis.length)return alert('Analyse a calibrated drawing first.');const waste=Number(document.getElementById('wastage').value)||0;const rows=[['System','Typical size','Detected length (m)','Wastage (%)','Order quantity (m)'],...analysis.map(a=>[a.name,a.size,a.length.toFixed(2),waste,(a.length*(1+waste/100)).toFixed(2)])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='PlumbEstimate_Preliminary_Pipe_BOQ.csv';a.click();URL.revokeObjectURL(url);};
+document.getElementById('print').onclick=()=>window.print();
+</script>
+</body></html>
